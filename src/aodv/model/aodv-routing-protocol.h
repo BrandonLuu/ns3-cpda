@@ -45,11 +45,49 @@ namespace ns3
 {
 namespace aodv
 {
+/*
+ * Hash Map of (IP,Key)
+ */
+class KeyMap{
+	std::map<Ipv4Address, uint16_t> m_ipKeyMap; //(ip,key) mapping
+public:
+	void AddKey(Ipv4Address ip, uint16_t key){
+		m_ipKeyMap.insert(std::make_pair(ip,key));
+	}
+	void DeleteKey(Ipv4Address ip){
+		m_ipKeyMap.erase(ip);
+	}
+
+	//Find a matching pair of keys from x and y
+	uint16_t FindMatchingKey(std::vector<uint16_t> x, std::vector<uint16_t> y){
+		typedef std::vector<uint16_t>::const_iterator VectorIterator;
+
+		// iterate through vector x
+		for(VectorIterator xiter = x.begin(); xiter != x.end(); xiter++){
+
+			// find if xkey inside of vector y
+			VectorIterator yiter = find(y.begin(), y.end(), *xiter);
+
+			if(yiter != y.end()){//no key found, go onto the next key
+				return *yiter;
+			}
+		}
+		return 0;
+	}
+	void Print(void)const{
+		for (std::map<Ipv4Address, uint16_t>::const_iterator i = m_ipKeyMap.begin ();
+				i != m_ipKeyMap.end (); ++i){
+			std::cout << "IP: " << i->first << " Key: " << i->second << std::endl;
+		}
+	}
+};
+
 /**
  * \ingroup aodv
- * 
+ *
  * \brief AODV routing protocol
  */
+
 class RoutingProtocol : public Ipv4RoutingProtocol
 {
 public:
@@ -295,6 +333,7 @@ private:
   uint16_t m_keyTotal; //total number of possible keys
   uint16_t m_keySelection; // total number of keys to be selected per node
   std::vector<uint16_t> m_key; // CPDA keys for exchange
+  KeyMap m_keyMap; //(IP,Key) Mapping for neighbor nodes
 
 };
 

@@ -54,9 +54,46 @@ NS_OBJECT_ENSURE_REGISTERED(RoutingProtocol);
 /// UDP Port for AODV control traffic
 const uint32_t RoutingProtocol::AODV_PORT = 654;
 
+
+/*
+ * Hash Map of (IP,Key)
+ */
+//class KeyMap{
+//	std::map<Ipv4Address, uint16_t> m_ipKeyMap; //(ip,key) mapping
+//public:
+//	void AddKey(Ipv4Address ip, uint16_t key){
+//		m_ipKeyMap.insert(std::make_pair(ip,key));
+//	}
+//	void DeleteKey(Ipv4Address ip){
+//		m_ipKeyMap.erase(ip);
+//	}
+//
+//	//Find a matching pair of keys from x and y
+//	uint16_t FindMatchingKey(std::vector<uint16_t> x, std::vector<uint16_t> y){
+//		typedef std::vector<uint16_t>::const_iterator VectorIterator;
+//
+//		// iterate through vector x
+//		for(VectorIterator xiter = x.begin(); xiter != x.end(); xiter++){
+//
+//			// find if xkey inside of vector y
+//			VectorIterator yiter = find(y.begin(), y.end(), *xiter);
+//
+//			if(yiter != y.end()){//no key found, go onto the next key
+//				return *yiter;
+//			}
+//		}
+//		return 0;
+//	}
+//	void Print(void)const{
+//		for (std::map<Ipv4Address, uint16_t>::const_iterator i = m_ipKeyMap.begin ();
+//				i != m_ipKeyMap.end (); ++i){
+//			std::cout << "IP: " << i->first << " Key: " << i->second << std::endl;
+//		}
+//	}
+//};
+
 //-----------------------------------------------------------------------------
 /// Tag used by AODV implementation
-
 class DeferredRouteOutputTag: public Tag {
 
 public:
@@ -332,10 +369,14 @@ void RoutingProtocol::Start() {
 
 	// Key selection pre-distribution
 	for (int i = 0; i < m_keySelection; i++) {
-		m_key[i] = m_uniformRandomVariable->GetInteger(0, m_keyTotal);
+		m_key[i] = m_uniformRandomVariable->GetInteger(1, m_keyTotal);
 	};
+
+
 	check();
-	SendKey();
+	uint16_t ret = m_keyMap.FindMatchingKey(m_key,m_key);
+	std::cout << "Map: " << ret << std::endl;
+	//SendKey();
 }
 
 // CPDA - Test function
@@ -572,7 +613,7 @@ void RoutingProtocol::SendKey(){
 		keyHeader.SetKey(m_key); //copy keys into header
 
 		//CPDA TESTING
-		std::cout << "SendKey: " << m_key[0] << std::endl;
+		std::cout << "SendKey: " << m_key[0] << "To: " << std::endl;
 
 		// Add tag for IP 1-hop broadcast
 		SocketIpTtlTag tag;
@@ -592,8 +633,7 @@ void RoutingProtocol::SendKey(){
 			destination = iface.GetBroadcast();
 		}
 		Time jitter = Time(MilliSeconds(m_uniformRandomVariable->GetInteger(0, 10)));
-		Simulator::Schedule(jitter, &RoutingProtocol::SendTo, this, socket,
-				packet, destination);
+		Simulator::Schedule(jitter, &RoutingProtocol::SendTo, this, socket, packet, destination);
 	}
 }
 
@@ -1190,7 +1230,6 @@ void RoutingProtocol::RecvAodv(Ptr<Socket> socket) {
 		break;
 	}
 	case CPDATYPE_KEY: {
-		//TODO: Add function to handle cpda share key
 		RecvKey(packet, receiver, sender);
 		break;
 	}
@@ -1382,10 +1421,7 @@ void RoutingProtocol::RecvRequest(Ptr<Packet> p, Ipv4Address receiver,
 		 * However, the forwarding node MUST NOT modify its maintained value for the destination sequence number, even if the value
 		 * received in the incoming RREQ is larger than the value currently maintained by the forwarding node.
 		 */
-		if ((rreqHeader.GetUnknownSeqno()
-				|| (int32_t(toDst.GetSeqNo())
-						- int32_t(rreqHeader.GetDstSeqno()) >= 0))
-				&& toDst.GetValidSeqNo()) {
+		if ((rreqHeader.GetUnknownSeqno() || (int32_t(toDst.GetSeqNo()) - int32_t(rreqHeader.GetDstSeqno()) >= 0)) && toDst.GetValidSeqNo()) {
 			if (!rreqHeader.GetDestinationOnly() && toDst.GetFlag() == VALID) {
 				m_routingTable.LookupRoute(origin, toOrigin);
 				SendReplyByIntermediateNode(toDst, toOrigin,
