@@ -36,9 +36,9 @@
 
 
 // Simulation Parameters
-#define NODE_NUM 3 // number of nodes in the network
-#define NODE_STEP 100 // step distance between nodes
-#define TOTAL_TIME 1 // total simulation time
+#define NODE_NUM 6 // number of sensor nodes in the network
+#define NODE_STEP 50 // step distance between nodes
+#define TOTAL_TIME 5 // total simulation time
 
 
 using namespace ns3;
@@ -80,6 +80,8 @@ private:
 
 	// network
 	NodeContainer nodes;
+	NodeContainer rootNode;
+	NodeContainer senNodes;
 	NetDeviceContainer devices;
 	Ipv4InterfaceContainer interfaces;
 
@@ -119,16 +121,23 @@ void Cpda::Run() {
 	CreateNodes();
 	CreateDevices();
 	InstallInternetStack();
-	InstallApplications();
+	//InstallApplications();
 
 	std::cout << "Starting simulation for " << totalTime << " s ...\n";
 
+	// Configure NetAnim
 	AnimationInterface anim("cpda-anim.xml");
-	for (uint32_t i = 0; i < nodes.GetN(); ++i) {
 
-		anim.UpdateNodeDescription(nodes.Get(i), "STA"); // animation line
-		anim.UpdateNodeColor(nodes.Get(i), 255, 0, 0); // Optional
-		anim.UpdateNodeSize(nodes.Get(i)->GetId(), 10, 10);
+	// Configure root node
+	anim.UpdateNodeDescription(rootNode.Get(0), "ROOT"); // animation line
+	anim.UpdateNodeColor(rootNode.Get(0), 0, 255, 0); // Optional
+	anim.UpdateNodeSize(rootNode.Get(0)->GetId(), 10, 10);
+
+	// Configure sensor nodes
+	for (uint32_t i = 0; i < senNodes.GetN(); ++i) {
+		anim.UpdateNodeDescription(senNodes.Get(i), "STA"); // animation line
+		anim.UpdateNodeColor(senNodes.Get(i), 255, 0, 0); // Optional
+		anim.UpdateNodeSize(senNodes.Get(i)->GetId(), 10, 10);
 	}
 
 	Simulator::Stop(Seconds(totalTime));
@@ -140,35 +149,56 @@ void Cpda::Report(std::ostream &) {
 }
 
 void Cpda::CreateNodes() {
-	std::cout << "Creating " << (unsigned) size << " nodes " << step
-			<< " m apart.\n";
-	nodes.Create(size);
+	std::cout << "Creating " << (unsigned) size << " nodes " << step << " m apart.\n";
+
+	// Create root and sensor
+	rootNode.Create(1);
+	senNodes.Create(size);
+	// Add root and sensor to a single nodes container
+	nodes.Add(senNodes);
+	nodes.Add(rootNode);
+
 	// Name nodes
-	for (uint32_t i = 0; i < size; ++i) {
+	for (uint32_t i = 1; i < size; ++i) {
 		std::ostringstream os;
 		os << "node-" << i;
 		Names::Add(os.str(), nodes.Get(i));
 	}
-	// Create static grid
-	MobilityHelper mobility;
-	mobility.SetPositionAllocator("ns3::GridPositionAllocator",
-			"MinX", DoubleValue(100.0),
-			"MinY", DoubleValue(100.0),
-			"DeltaX", DoubleValue(step),
-			"DeltaY", DoubleValue(step),
-			"GridWidth", UintegerValue(10),
-			"LayoutType", StringValue("RowFirst"));
-	mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-	mobility.Install(nodes);
 
+	// Place root in top middle of grid 3x3 grid
+	MobilityHelper mobility;
+	mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+
+	// Place the root node at (100,0)
+	mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+			"MinX", DoubleValue(50.0),
+			"MinY", DoubleValue(0.0));
+	mobility.Install(rootNode);
+
+	// Make grid of sensor nodes starting at (0,100)
+	mobility.SetPositionAllocator("ns3::GridPositionAllocator",
+			"MinX", DoubleValue(0.0),
+			"MinY", DoubleValue(100.0),
+			"DeltaX", DoubleValue(50),
+			"DeltaY", DoubleValue(100),
+			"GridWidth", UintegerValue(3),
+			"LayoutType", StringValue("RowFirst"));
+	mobility.Install(senNodes);
 }
 
 void Cpda::CreateDevices() {
 	WifiMacHelper wifiMac;
 	wifiMac.SetType("ns3::AdhocWifiMac");
 	YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default();
-	YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
+
+	// Set wifi propgation Disk model with 100m
+	YansWifiChannelHelper wifiChannel;
+	//YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
+
+	wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
+	wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel", "MaxRange", DoubleValue(150));
 	wifiPhy.SetChannel(wifiChannel.Create());
+
 	WifiHelper wifi;
 	wifi.SetRemoteStationManager("ns3::ConstantRateWifiManager", "DataMode",
 			StringValue("OfdmRate6Mbps"), "RtsCtsThreshold", UintegerValue(0));
@@ -182,10 +212,15 @@ void Cpda::CreateDevices() {
 void Cpda::InstallInternetStack() {
 	AodvHelper aodv;
 	// you can configure AODV attributes here using aodv.Set(name, value)
-	//TODO: ADD CONFIGURE ROOT NODE ATTRIBUTE FOR TREE FORMATION
 	InternetStackHelper stack;
 	stack.SetRoutingHelper(aodv); // has effect on the next Install ()
-	stack.Install(nodes);
+	stack.Install(senNodes);
+
+	// Set root node attribute
+	aodv.Set("EnableQueryNode", BooleanValue(true));
+	stack.SetRoutingHelper(aodv); // has effect on the next Install ()
+	stack.Install(rootNode);
+
 	Ipv4AddressHelper address;
 	address.SetBase("10.0.0.0", "255.0.0.0");
 	interfaces = address.Assign(devices);
@@ -202,16 +237,8 @@ void Cpda::InstallApplications() {
 	ping.SetAttribute("Verbose", BooleanValue(true));
 
 	ApplicationContainer p = ping.Install(nodes.Get(0));
-	p.Start(Seconds(0));
+	p.Start(Seconds(2.0));
 	p.Stop(Seconds(totalTime) - Seconds(0.001));
-
-
-	//std::cout <<"NodeID: "<< nodes.Get(19)->GetId() <<std::endl;
-
-	// move node away
-//  Ptr<Node> node = nodes.Get (size/2);
-//  Ptr<MobilityModel> mob = node->GetObject<MobilityModel> ();
-//  Simulator::Schedule (Seconds (totalTime/3), &MobilityModel::SetPosition, mob, Vector (1e5, 1e5, 1e5));
 }
 
 //=============================================================================

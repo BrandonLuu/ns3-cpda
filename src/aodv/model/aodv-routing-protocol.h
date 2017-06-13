@@ -58,7 +58,8 @@ public:
 		m_ipKeyMap.erase(ip);
 	}
 
-	//Find a matching pair of keys from x and y
+	// Find a matching pair of keys from x and y
+	// Returns 0 otherwise
 	uint16_t FindMatchingKey(std::vector<uint16_t> x, std::vector<uint16_t> y){
 		typedef std::vector<uint16_t>::const_iterator VectorIterator;
 
@@ -81,6 +82,10 @@ public:
 		}
 	}
 };
+
+
+
+
 
 /**
  * \ingroup aodv
@@ -125,7 +130,17 @@ public:
   void SetBroadcastEnable (bool f) { m_enableBroadcast = f; }
   bool GetBroadcastEnable () const { return m_enableBroadcast; }
 
- /**
+  //==============================================================
+  //==============================================================
+  //
+  // CPDA PROTOCOL CHANGES
+  //
+  //==============================================================
+  //==============================================================
+  void SetQueryNode(bool f) { m_enableQueryNode = f;}
+  bool GetQueryNode() const { return m_enableQueryNode; }
+
+  /**
   * Assign a fixed random variable stream number to the random variables
   * used by this model.  Return the number of streams (possibly zero) that
   * have been assigned.
@@ -177,6 +192,14 @@ private:
   bool m_enableHello;                  ///< Indicates whether a hello messages enable
   bool m_enableBroadcast;              ///< Indicates whether a a broadcast data packets forwarding enable
   //\}
+  //==============================================================
+  //==============================================================
+  //
+  // CPDA PROTOCOL VARIABLE
+  //
+  //==============================================================
+  //==============================================================
+  bool m_enableQueryNode; // Indicates that this node is the root query node
 
   /// IP protocol
   Ptr<Ipv4> m_ipv4;
@@ -323,17 +346,30 @@ private:
   //==============================================================
   //==============================================================
   void check();
+  // Key Functions
   void SendKey(); //Broadcast keys to all neighbors
-  void RecvKey(Ptr<Packet> p, Ipv4Address my,Ipv4Address src);
+  void RecvKey(Ptr<Packet> p, Ipv4Address my, Ipv4Address src);
 
-  //Delete this
-  void ProcessKey(RrepHeader const & rrepHeader, Ipv4Address receiverIfaceAddr);/// Process key message
+  // Query Functions
+  void SendQuery(); // Broadcast query
+  void RecvQuery(Ptr<Packet> p, Ipv4Address my, Ipv4Address src);
 
- /// CPDA Key Management
+  // Join Functions - Unicast Query Pkts
+  void SendJoin(Ipv4Address dst);
+  void RecvJoin(Ptr<Packet> p, Ipv4Address my, Ipv4Address src);
+
+  // CPDA Key Management
   uint16_t m_keyTotal; //total number of possible keys
   uint16_t m_keySelection; // total number of keys to be selected per node
   std::vector<uint16_t> m_key; // CPDA keys for exchange
   KeyMap m_keyMap; //(IP,Key) Mapping for neighbor nodes
+
+  // Cluster Formation Changes
+  bool m_isClusterLeader; // flag to check if this node is a cluster leader
+  bool m_isPartOfCluster; // flag to check if this node is part of a cluster
+  Ipv4Address m_clusterLeaderIp; // IP of the cluster leader
+  std::vector<Ipv4Address> m_clusterMembers; // IP of all cluster members
+
 
 };
 

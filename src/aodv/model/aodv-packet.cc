@@ -72,7 +72,9 @@ uint32_t TypeHeader::Deserialize(Buffer::Iterator start) {
 	case AODVTYPE_RREP:
 	case AODVTYPE_RERR:
 	case AODVTYPE_RREP_ACK:
-	case CPDATYPE_KEY: {
+	case CPDATYPE_KEY:
+	case CPDATYPE_QUERY:
+	case CPDATYPE_JOIN:{
 		m_type = (MessageType) type;
 		break;
 	}
@@ -103,7 +105,15 @@ void TypeHeader::Print(std::ostream &os) const {
 		break;
 	}
 	case CPDATYPE_KEY: {
-		os << "SHARE_KEY";
+		os << "CPDA_KEY";
+		break;
+	}
+	case CPDATYPE_QUERY: {
+		os << "CPDA_QUERY";
+		break;
+	}
+	case CPDATYPE_JOIN: {
+		os << "CPDA_JOIN";
 		break;
 	}
 	default:
@@ -120,8 +130,6 @@ operator<<(std::ostream & os, TypeHeader const & h) {
 	h.Print(os);
 	return os;
 }
-
-
 
 
 
@@ -161,7 +169,6 @@ TypeId CpdaKeyHeader::GetInstanceTypeId() const {
 	return GetTypeId();
 }
 
-//TODO: FIX BYTE SIZE
 uint32_t CpdaKeyHeader::GetSerializedSize() const {
 	return 419;
 }
@@ -274,8 +281,275 @@ operator<<(std::ostream & os, CpdaKeyHeader const & h) {
 //==============================================================
 //==============================================================
 
+//==============================================================
+//==============================================================
+//
+// CPDA - QUERY
+//
+//==============================================================
+//==============================================================
+//TODO: fix constructor
+CpdaQueryHeader::CpdaQueryHeader(uint8_t prefixSize, uint8_t hopCount, Ipv4Address dst,
+		uint32_t dstSeqNo, Ipv4Address origin, Time lifeTime) :
+		m_flags(0),
+		m_prefixSize(prefixSize),
+		m_hopCount(hopCount),
+		m_dst(dst),
+		m_dstSeqNo(dstSeqNo),
+		m_origin(origin)
+{
+	m_lifeTime = uint32_t(lifeTime.GetMilliSeconds());
+
+}
+
+NS_OBJECT_ENSURE_REGISTERED(CpdaQueryHeader);
+TypeId CpdaQueryHeader::GetTypeId() {
+	static TypeId tid =
+			TypeId("ns3::aodv::CpdaQueryHeader").SetParent<Header>().SetGroupName(
+					"Aodv").AddConstructor<CpdaQueryHeader>();
+	return tid;
+}
+
+TypeId CpdaQueryHeader::GetInstanceTypeId() const {
+	return GetTypeId();
+}
+
+//TODO: FIX BYTE SIZE
+uint32_t CpdaQueryHeader::GetSerializedSize() const {
+	return 19;
+}
+
+void CpdaQueryHeader::Serialize(Buffer::Iterator i) const {
+	i.WriteU8(m_flags);
+	i.WriteU8(m_prefixSize);
+	i.WriteU8(m_hopCount);
+	WriteTo(i, m_dst);
+	i.WriteHtonU32(m_dstSeqNo);
+	WriteTo(i, m_origin);
+	i.WriteHtonU32(m_lifeTime);
+}
+
+uint32_t CpdaQueryHeader::Deserialize(Buffer::Iterator start) {
+	Buffer::Iterator i = start;
+
+	m_flags = i.ReadU8();
+	m_prefixSize = i.ReadU8();
+	m_hopCount = i.ReadU8();
+	ReadFrom(i, m_dst);
+	m_dstSeqNo = i.ReadNtohU32();
+	ReadFrom(i, m_origin);
+	m_lifeTime = i.ReadNtohU32();
+
+	uint32_t dist = i.GetDistanceFrom(start);
+	NS_ASSERT(dist == GetSerializedSize());
+	return dist;
+}
+
+void CpdaQueryHeader::Print(std::ostream &os) const {
+	os << "destination: ipv4 " << m_dst << " sequence number " << m_dstSeqNo;
+	if (m_prefixSize != 0) {
+		os << " prefix size " << m_prefixSize;
+	}
+	os << " source ipv4 " << m_origin << " lifetime " << m_lifeTime
+			<< " acknowledgment required flag " << (*this).GetAckRequired();
+}
+
+void CpdaQueryHeader::SetLifeTime(Time t) {
+	m_lifeTime = t.GetMilliSeconds();
+}
+
+Time CpdaQueryHeader::GetLifeTime() const {
+	Time t(MilliSeconds(m_lifeTime));
+	return t;
+}
+
+void CpdaQueryHeader::SetAckRequired(bool f) {
+	if (f)
+		m_flags |= (1 << 6);
+	else
+		m_flags &= ~(1 << 6);
+}
+
+bool CpdaQueryHeader::GetAckRequired() const {
+	return (m_flags & (1 << 6));
+}
+
+void CpdaQueryHeader::SetPrefixSize(uint8_t sz) {
+	m_prefixSize = sz;
+}
+
+uint8_t CpdaQueryHeader::GetPrefixSize() const {
+	return m_prefixSize;
+}
+
+void CpdaQueryHeader::SetHello(Ipv4Address origin, uint32_t srcSeqNo,
+		Time lifetime) {
+	m_flags = 0;
+	m_prefixSize = 0;
+	m_hopCount = 0;
+	m_dst = origin;
+	m_dstSeqNo = srcSeqNo;
+	m_origin = origin;
+	m_lifeTime = lifetime.GetMilliSeconds();
+}
+
+//TODO: ADD FUNCTION TO CHECK FOR KEYS
+bool CpdaQueryHeader::operator==(CpdaQueryHeader const & o) const {
+	return (m_flags == o.m_flags && m_prefixSize == o.m_prefixSize
+			&& m_hopCount == o.m_hopCount && m_dst == o.m_dst
+			&& m_dstSeqNo == o.m_dstSeqNo && m_origin == o.m_origin
+			&& m_lifeTime == o.m_lifeTime);
+}
+
+std::ostream &
+operator<<(std::ostream & os, CpdaQueryHeader const & h) {
+	h.Print(os);
+	return os;
+}
 
 
+//==============================================================
+//==============================================================
+//
+// END CPDA - QUERY
+//
+//==============================================================
+//==============================================================
+
+//==============================================================
+//==============================================================
+//
+// CPDA - JOIN
+//
+//==============================================================
+//==============================================================
+//TODO: fix constructor
+CpdaJoinHeader::CpdaJoinHeader(uint8_t prefixSize, uint8_t hopCount, Ipv4Address dst,
+		uint32_t dstSeqNo, Ipv4Address origin, Time lifeTime) :
+		m_flags(0),
+		m_prefixSize(prefixSize),
+		m_hopCount(hopCount),
+		m_dst(dst),
+		m_dstSeqNo(dstSeqNo),
+		m_origin(origin)
+{
+	m_lifeTime = uint32_t(lifeTime.GetMilliSeconds());
+
+}
+
+NS_OBJECT_ENSURE_REGISTERED(CpdaJoinHeader);
+TypeId CpdaJoinHeader::GetTypeId() {
+	static TypeId tid =
+			TypeId("ns3::aodv::CpdaJoinHeader").SetParent<Header>().SetGroupName(
+					"Aodv").AddConstructor<CpdaJoinHeader>();
+	return tid;
+}
+
+TypeId CpdaJoinHeader::GetInstanceTypeId() const {
+	return GetTypeId();
+}
+
+//TODO: FIX BYTE SIZE
+uint32_t CpdaJoinHeader::GetSerializedSize() const {
+	return 19;
+}
+
+void CpdaJoinHeader::Serialize(Buffer::Iterator i) const {
+	i.WriteU8(m_flags);
+	i.WriteU8(m_prefixSize);
+	i.WriteU8(m_hopCount);
+	WriteTo(i, m_dst);
+	i.WriteHtonU32(m_dstSeqNo);
+	WriteTo(i, m_origin);
+	i.WriteHtonU32(m_lifeTime);
+}
+
+uint32_t CpdaJoinHeader::Deserialize(Buffer::Iterator start) {
+	Buffer::Iterator i = start;
+
+	m_flags = i.ReadU8();
+	m_prefixSize = i.ReadU8();
+	m_hopCount = i.ReadU8();
+	ReadFrom(i, m_dst);
+	m_dstSeqNo = i.ReadNtohU32();
+	ReadFrom(i, m_origin);
+	m_lifeTime = i.ReadNtohU32();
+
+	uint32_t dist = i.GetDistanceFrom(start);
+	NS_ASSERT(dist == GetSerializedSize());
+	return dist;
+}
+
+void CpdaJoinHeader::Print(std::ostream &os) const {
+	os << "destination: ipv4 " << m_dst << " sequence number " << m_dstSeqNo;
+	if (m_prefixSize != 0) {
+		os << " prefix size " << m_prefixSize;
+	}
+	os << " source ipv4 " << m_origin << " lifetime " << m_lifeTime
+			<< " acknowledgment required flag " << (*this).GetAckRequired();
+}
+
+void CpdaJoinHeader::SetLifeTime(Time t) {
+	m_lifeTime = t.GetMilliSeconds();
+}
+
+Time CpdaJoinHeader::GetLifeTime() const {
+	Time t(MilliSeconds(m_lifeTime));
+	return t;
+}
+
+void CpdaJoinHeader::SetAckRequired(bool f) {
+	if (f)
+		m_flags |= (1 << 6);
+	else
+		m_flags &= ~(1 << 6);
+}
+
+bool CpdaJoinHeader::GetAckRequired() const {
+	return (m_flags & (1 << 6));
+}
+
+void CpdaJoinHeader::SetPrefixSize(uint8_t sz) {
+	m_prefixSize = sz;
+}
+
+uint8_t CpdaJoinHeader::GetPrefixSize() const {
+	return m_prefixSize;
+}
+
+void CpdaJoinHeader::SetHello(Ipv4Address origin, uint32_t srcSeqNo,
+		Time lifetime) {
+	m_flags = 0;
+	m_prefixSize = 0;
+	m_hopCount = 0;
+	m_dst = origin;
+	m_dstSeqNo = srcSeqNo;
+	m_origin = origin;
+	m_lifeTime = lifetime.GetMilliSeconds();
+}
+
+//TODO: ADD FUNCTION TO CHECK FOR KEYS
+bool CpdaJoinHeader::operator==(CpdaJoinHeader const & o) const {
+	return (m_flags == o.m_flags && m_prefixSize == o.m_prefixSize
+			&& m_hopCount == o.m_hopCount && m_dst == o.m_dst
+			&& m_dstSeqNo == o.m_dstSeqNo && m_origin == o.m_origin
+			&& m_lifeTime == o.m_lifeTime);
+}
+
+std::ostream &
+operator<<(std::ostream & os, CpdaJoinHeader const & h) {
+	h.Print(os);
+	return os;
+}
+
+
+//==============================================================
+//==============================================================
+//
+// END CPDA - JOIN
+//
+//==============================================================
+//==============================================================
 
 
 //-----------------------------------------------------------------------------

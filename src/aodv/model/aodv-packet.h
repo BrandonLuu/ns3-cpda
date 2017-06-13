@@ -44,7 +44,9 @@ enum MessageType
   AODVTYPE_RREP  = 2,   //!< AODVTYPE_RREP
   AODVTYPE_RERR  = 3,   //!< AODVTYPE_RERR
   AODVTYPE_RREP_ACK = 4, //!< AODVTYPE_RREP_ACK
-  CPDATYPE_KEY = 5
+  CPDATYPE_KEY = 5,
+  CPDATYPE_QUERY = 6,
+  CPDATYPE_JOIN = 7,
 };
 
 /**
@@ -64,9 +66,6 @@ public:
   void Serialize (Buffer::Iterator start) const;
   uint32_t Deserialize (Buffer::Iterator start);
   void Print (std::ostream &os) const;
-  // CPDA Functions
-  uint16_t CopyKeys(uint16_t a[], uint16_t b[]);
-
 
   /// Return type
   MessageType Get () const { return m_type; }
@@ -84,15 +83,11 @@ std::ostream & operator<< (std::ostream & os, TypeHeader const & h);
 
 
 
-//==============================================================
-//==============================================================
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 //
 // CPDA - KEY EXCHANGE - CPDATYPE_KEY
 //
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-//==============================================================
-//==============================================================
 /*
  * Description: Used RREP class as baseline
  *
@@ -156,19 +151,140 @@ private:
 };
 
 std::ostream & operator<< (std::ostream & os, CpdaKeyHeader const &);
-//==============================================================
-//==============================================================
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 //
 // END CPDA - KEY EXCHANGE
 //
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-//==============================================================
-//==============================================================
 
 
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//
+// CPDA - QUERY
+//
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+/*
+ * Description: Used RREP class as baseline
+ *
+ */
+class CpdaQueryHeader: public Header
+{
+public:
+  /// c-tor
+  CpdaQueryHeader (uint8_t prefixSize = 0, uint8_t hopCount = 0, Ipv4Address dst = Ipv4Address (), uint32_t dstSeqNo = 0, Ipv4Address origin =
+                Ipv4Address (), Time lifetime = MilliSeconds (0));
 
+  // Header serialization/deserialization
+  static TypeId GetTypeId ();
+  TypeId GetInstanceTypeId () const;
+  uint32_t GetSerializedSize () const;
+  void Serialize (Buffer::Iterator start) const;
+  uint32_t Deserialize (Buffer::Iterator start);
+  void Print (std::ostream &os) const;
 
+  // Fields
+  void SetHopCount (uint8_t count) { m_hopCount = count; }
+  uint8_t GetHopCount () const { return m_hopCount; }
+  void SetDst (Ipv4Address a) { m_dst = a; }
+  Ipv4Address GetDst () const { return m_dst; }
+  void SetDstSeqno (uint32_t s) { m_dstSeqNo = s; }
+  uint32_t GetDstSeqno () const { return m_dstSeqNo; }
+  void SetOrigin (Ipv4Address a) { m_origin = a; }
+  Ipv4Address GetOrigin () const { return m_origin; }
+  void SetLifeTime (Time t);
+  Time GetLifeTime () const;
+
+  // Flags
+  void SetAckRequired (bool f);
+  bool GetAckRequired () const;
+  void SetPrefixSize (uint8_t sz);
+  uint8_t GetPrefixSize () const;
+
+  /// Configure RREP to be a Hello message
+  void SetHello (Ipv4Address src, uint32_t srcSeqNo, Time lifetime);
+
+  bool operator== (CpdaQueryHeader const & o) const;
+private:
+  uint8_t       m_flags;                  ///< A - acknowledgment required flag
+  uint8_t       m_prefixSize;         ///< Prefix Size
+  uint8_t       m_hopCount;         ///< Hop Count
+  Ipv4Address   m_dst;              ///< Destination IP Address
+  uint32_t      m_dstSeqNo;         ///< Destination Sequence Number
+  Ipv4Address   m_origin;           ///< Source IP Address
+  uint32_t      m_lifeTime;         ///< Lifetime (in milliseconds)
+};
+
+std::ostream & operator<< (std::ostream & os, CpdaQueryHeader const &);
+
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//
+// END CPDA - QUERY
+//
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//
+// CPDA - JOIN
+//
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+/*
+ * Description: Used RREP class as baseline
+ *
+ */
+class CpdaJoinHeader: public Header
+{
+public:
+  /// c-tor
+	CpdaJoinHeader (uint8_t prefixSize = 0, uint8_t hopCount = 0, Ipv4Address dst = Ipv4Address (), uint32_t dstSeqNo = 0, Ipv4Address origin =
+                Ipv4Address (), Time lifetime = MilliSeconds (0));
+
+  // Header serialization/deserialization
+  static TypeId GetTypeId ();
+  TypeId GetInstanceTypeId () const;
+  uint32_t GetSerializedSize () const;
+  void Serialize (Buffer::Iterator start) const;
+  uint32_t Deserialize (Buffer::Iterator start);
+  void Print (std::ostream &os) const;
+
+  // Fields
+  void SetHopCount (uint8_t count) { m_hopCount = count; }
+  uint8_t GetHopCount () const { return m_hopCount; }
+  void SetDst (Ipv4Address a) { m_dst = a; }
+  Ipv4Address GetDst () const { return m_dst; }
+  void SetDstSeqno (uint32_t s) { m_dstSeqNo = s; }
+  uint32_t GetDstSeqno () const { return m_dstSeqNo; }
+  void SetOrigin (Ipv4Address a) { m_origin = a; }
+  Ipv4Address GetOrigin () const { return m_origin; }
+  void SetLifeTime (Time t);
+  Time GetLifeTime () const;
+
+  // Flags
+  void SetAckRequired (bool f);
+  bool GetAckRequired () const;
+  void SetPrefixSize (uint8_t sz);
+  uint8_t GetPrefixSize () const;
+
+  /// Configure RREP to be a Hello message
+  void SetHello (Ipv4Address src, uint32_t srcSeqNo, Time lifetime);
+
+  bool operator== (CpdaJoinHeader const & o) const;
+private:
+  uint8_t       m_flags;                  ///< A - acknowledgment required flag
+  uint8_t       m_prefixSize;         ///< Prefix Size
+  uint8_t       m_hopCount;         ///< Hop Count
+  Ipv4Address   m_dst;              ///< Destination IP Address
+  uint32_t      m_dstSeqNo;         ///< Destination Sequence Number
+  Ipv4Address   m_origin;           ///< Source IP Address
+  uint32_t      m_lifeTime;         ///< Lifetime (in milliseconds)
+};
+
+std::ostream & operator<< (std::ostream & os, CpdaJoinHeader const &);
+
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+//
+// END CPDA - JOIN
+//
+// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
 //==============================================================
